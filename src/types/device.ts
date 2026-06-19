@@ -1,0 +1,23 @@
+export type DevicePowerState = "on" | "off";
+
+export type DeviceCommandName = "turn_off" | "turn_on" | "restart";
+
+export type DeviceState = {
+  device_id: string;
+  is_online: boolean;
+  power_state: DevicePowerState;
+  last_seen_at: string | null;
+  last_command_at: string | null;
+  updated_at: string | null;
+};
+
+export type DeviceCommand = {
+  id: number;
+  device_id: string;
+  command: DeviceCommandName;
+  status: "pending" | "sent" | "acknowledged" | "failed";
+  requested_by: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  acknowledged_at: string | null;
+};

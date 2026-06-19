@@ -1042,7 +1042,7 @@ function CategoryStatusLine({
   label: string;
 }) {
   const status = getCategoryStatus(data, category);
-  const score = status === "AMAN" ? 92 : status === "WASPADA" ? 58 : 24;
+  const score = status === "AMAN" ? 24 : status === "WASPADA" ? 58 : 92;
 
   return (
     <TableRow>
@@ -1061,9 +1061,9 @@ function CategoryStatusLine({
             <div
               className={cn(
                 "h-full rounded-full",
-                status === "AMAN" && "bg-emerald-500",
-                status === "WASPADA" && "bg-amber-500",
-                status === "BAHAYA" && "bg-red-500",
+                score <= 33 && "bg-emerald-500",
+                score > 33 && score <= 66 && "bg-amber-500",
+                score > 66 && "bg-red-500",
               )}
               style={{ width: `${score}%` }}
             />

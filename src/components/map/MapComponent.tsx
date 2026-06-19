@@ -11,6 +11,7 @@ import {
   TileLayer,
 } from "react-leaflet";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { formatParameterValue } from "@/lib/parameter-units";
 import { cn } from "@/lib/utils";
 import type { AnalysisResponse, SensorAnalysis } from "@/types/analysis";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
@@ -173,7 +174,7 @@ function LocationPopup({
                       {param.param}
                     </span>
                     <span className="text-[10px] font-black text-sky-600 dark:text-sky-300">
-                      {param.nilai}
+                      {formatParameterValue(param.param, param.nilai)}
                     </span>
                   </div>
                   <div className="flex gap-1">

@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   BarChart3,
   BellRing,
+  BrainCircuit,
   Calendar,
   CheckCircle2,
   Clock3,
@@ -19,6 +20,7 @@ import {
   RadioTower,
   RefreshCcw,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   Wind,
 } from "lucide-react";
@@ -50,6 +52,7 @@ import {
   getSensors,
 } from "@/lib/dashboard/analysis-summary";
 import { cn } from "@/lib/utils";
+import { formatParameterValue } from "@/lib/parameter-units";
 import type {
   AnalysisCategoryName,
   AnalysisResponse,
@@ -154,6 +157,8 @@ export function DashboardHome() {
 
       <EarlyWarningCard warnings={activeWarnings} />
 
+      <AiDecisionSupport areaStatus={areaStatus} warnings={activeWarnings} />
+
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_380px]">
         <CategoryGrid data={data} />
         <OperationalPanel
@@ -229,7 +234,7 @@ function getWarningCause(sensor: SensorAnalysis) {
 
   return params
     .slice(0, 2)
-    .map((param) => `${param.param}: ${param.nilai}`)
+    .map((param) => `${param.param}: ${formatParameterValue(param.param, param.nilai)}`)
     .join(", ");
 }
 
@@ -684,6 +689,125 @@ function EarlyWarningCard({ warnings }: { warnings: ActiveWarning[] }) {
       </CardContent>
     </Card>
   );
+}
+
+function AiDecisionSupport({
+  areaStatus,
+  warnings,
+}: {
+  areaStatus: DashboardStatus;
+  warnings: ActiveWarning[];
+}) {
+  const { t } = useLanguage();
+  const actions = getDashboardRecommendations(warnings, t);
+
+  return (
+    <Card className="overflow-hidden rounded-2xl border-violet-200 bg-gradient-to-br from-white via-white to-violet-50/80 shadow-[0_20px_65px_-42px_rgba(109,40,217,0.75)] dark:border-violet-900/70 dark:from-slate-900 dark:via-slate-900 dark:to-violet-950/30">
+      <CardContent className="p-0">
+        <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr]">
+          <div className="bg-gradient-to-br from-violet-600 to-indigo-700 p-6 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-8 ring-white/10">
+                <BrainCircuit size={25} />
+              </div>
+              <Badge className="border-white/20 bg-white/15 text-white hover:bg-white/15">
+                <Sparkles size={12} />
+                Gemini 2.5 Flash
+              </Badge>
+            </div>
+            <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.18em] text-violet-100">
+              {t("aiDecisionSupport")}
+            </p>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight">
+              {t("operationalRecommendation")}
+            </h2>
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3">
+              <span className="text-sm font-medium text-violet-100">
+                {t("fuzzyStatus")}
+              </span>
+              <span className="text-sm font-bold">
+                {formatStatus(areaStatus, t)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-6 p-6 lg:grid-cols-[1fr_360px]">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+                {t("summary")}
+              </p>
+              <p className="mt-3 text-base font-semibold leading-7 text-slate-700 dark:text-slate-200">
+                {getDashboardSummary(warnings, t)}
+              </p>
+              <p className="mt-4 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {t("openCategoryForDetails")}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-violet-100 bg-white/80 p-4 dark:border-violet-900/60 dark:bg-slate-950/60">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+                {t("recommendedSteps")}
+              </p>
+              <ol className="mt-4 space-y-3">
+                {actions.map((action, index) => (
+                  <li className="flex gap-3" key={action}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 dark:bg-violet-950 dark:text-violet-200">
+                      {index + 1}
+                    </span>
+                    <span className="text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200">
+                      {action}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function getDashboardSummary(warnings: ActiveWarning[], t: TFunction) {
+  if (warnings.length === 0) return t("allMonitoringSafeSummary");
+
+  const affectedAreas = warnings.slice(0, 3).map((warning) => {
+    const parameters = warning.cause
+      .split(",")
+      .map((item) => item.split(":")[0].trim())
+      .join("/");
+
+    return `${warning.location} (${parameters})`;
+  });
+
+  return `${t("mostlySafeSummary")} ${t("attentionAtAreas")} ${affectedAreas.join(", ")}.`;
+}
+
+function getDashboardRecommendations(
+  warnings: ActiveWarning[],
+  t: TFunction,
+) {
+  if (warnings.length === 0) {
+    return [t("keepMonitoring"), t("verifySensor"), t("documentCondition")];
+  }
+
+  const causes = warnings.map((warning) => warning.cause.toUpperCase()).join(" ");
+  const categories = warnings.map((warning) => warning.category.toLowerCase()).join(" ");
+  const recommendations: string[] = [];
+
+  if (causes.includes("PM10") || causes.includes("PM25")) {
+    recommendations.push(t("waterHaulingRoad"));
+  }
+  if (causes.includes("CO") || categories.includes("emisi")) {
+    recommendations.push(t("inspectHeavyEquipmentEmission"));
+  }
+  if (causes.includes("H2S") || causes.includes("CH4") || categories.includes("gas")) {
+    recommendations.push(t("inspectVentilationAndGas"));
+  }
+
+  recommendations.push(t("monitorRiskAreasAgain"));
+
+  return [...new Set(recommendations)].slice(0, 3);
 }
 
 function CategoryGrid({ data }: { data: AnalysisResponse | null }) {

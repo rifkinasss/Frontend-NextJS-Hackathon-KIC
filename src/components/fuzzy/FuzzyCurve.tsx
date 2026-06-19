@@ -20,10 +20,11 @@ interface FuzzyCurveProps {
     hi: number[];
   };
   title: string;
+  unit?: string;
   dark?: boolean;
 }
 
-const FuzzyCurve = ({ data, title, dark = false }: FuzzyCurveProps) => {
+const FuzzyCurve = ({ data, title, unit = "", dark = false }: FuzzyCurveProps) => {
   // Transform data for Recharts
   const chartData = data.x.map((val, idx) => ({
     x: val,
@@ -45,7 +46,7 @@ const FuzzyCurve = ({ data, title, dark = false }: FuzzyCurveProps) => {
           dark ? 'text-white' : 'text-slate-800 dark:text-white'
         }`}
       >
-        {title}
+        {title}{unit ? ` (${unit})` : ""}
       </h3>
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -59,7 +60,8 @@ const FuzzyCurve = ({ data, title, dark = false }: FuzzyCurveProps) => {
               tick={{fill: dark ? '#cbd5e1' : '#94a3b8'}}
             />
             <YAxis fontSize={10} tick={{fill: dark ? '#cbd5e1' : '#94a3b8'}} />
-            <Tooltip 
+            <Tooltip
+              labelFormatter={(value) => `${value}${unit ? ` ${unit}` : ""}`}
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
             />
             <Legend

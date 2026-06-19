@@ -15,7 +15,8 @@ export type AnalysisParam = {
 export type AnalysisHistoryPoint = {
   timestamp: string;
   crisp?: number;
-  [key: string]: string | number | undefined;
+  parameters?: Record<string, number>;
+  is_averaged?: boolean;
 };
 
 export type SensorAnalysis = {

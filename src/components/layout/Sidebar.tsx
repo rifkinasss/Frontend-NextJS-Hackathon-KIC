@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Activity,
-  AlertTriangle,
   Flame,
   LayoutDashboard,
   Map as MapIcon,
@@ -64,8 +64,15 @@ export default function Sidebar() {
           href="/"
           title="SIMOSI"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-8 ring-amber-50/40 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-950/30">
-            <AlertTriangle size={20} />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl dark:bg-white/90 dark:shadow-[0_0_18px_4px_rgba(255,255,255,0.35)]">
+            <Image
+              alt="Logo SIMOSI"
+              className="h-9 w-9 object-contain"
+              height={500}
+              priority
+              src="/simosi-logo.png"
+              width={500}
+            />
           </span>
           {!collapsed && (
             <span className="min-w-0">

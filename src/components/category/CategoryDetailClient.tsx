@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  BrainCircuit,
   Calendar,
   CheckCircle2,
   Flame,
@@ -14,6 +15,7 @@ import {
   RefreshCcw,
   ShieldAlert,
   SlidersHorizontal,
+  Sparkles,
   Wind,
 } from "lucide-react";
 import {
@@ -29,6 +31,7 @@ import FuzzyCurve from "@/components/fuzzy/FuzzyCurve";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Card,
   CardContent,
@@ -38,6 +41,7 @@ import {
 } from "@/components/ui/card";
 import { fetchAnalysis } from "@/lib/api/analysis";
 import { fetchFuzzyConfig } from "@/lib/api/config";
+import { formatParameterValue, getParameterUnit } from "@/lib/parameter-units";
 import { cn } from "@/lib/utils";
 import type {
   AnalysisCategoryName,
@@ -196,7 +200,12 @@ export function CategoryDetailClient({ type }: { type: string }) {
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="space-y-6">
           <CategoryMetrics data={data} status={status} />
-          <TrendPanel data={trendData} isRealtime={isRealtime} />
+          <CategoryAiDecision data={data} status={status} type={categoryType} />
+          <TrendPanel
+            currentParameters={data[0]?.params ?? []}
+            data={trendData}
+            isRealtime={isRealtime}
+          />
           <SensorAnalysisPanel data={data} isRealtime={isRealtime} />
         </div>
 
@@ -603,10 +612,139 @@ function MetricCard({
   );
 }
 
+function CategoryAiDecision({
+  data,
+  status,
+  type,
+}: {
+  data: SensorAnalysis[];
+  status: DashboardStatus;
+  type: CategoryType;
+}) {
+  const { t } = useLanguage();
+  const affectedSensors = data.filter(
+    (sensor) =>
+      sensor.status.includes("WASPADA") || sensor.status.includes("BAHAYA"),
+  );
+  const dominantParameters = getDominantParameters(affectedSensors);
+  const recommendations = getCategoryRecommendations(type, status, t);
+
+  return (
+    <Card className="overflow-hidden rounded-2xl border-violet-200 shadow-[0_20px_65px_-44px_rgba(109,40,217,0.7)] dark:border-violet-900/70">
+      <CardHeader className="border-b border-violet-100 bg-gradient-to-r from-violet-50 to-indigo-50 dark:border-violet-900/60 dark:from-violet-950/30 dark:to-indigo-950/20">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white ring-8 ring-violet-100 dark:ring-violet-950/60">
+              <BrainCircuit size={24} />
+            </div>
+            <div>
+              <CardDescription className="text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-300">
+                {t("categoryAiAnalysis")}
+              </CardDescription>
+              <CardTitle className="mt-2 text-2xl text-slate-950 dark:text-white">
+                {t("categoryDecisionSupport")}
+              </CardTitle>
+            </div>
+          </div>
+          <Badge className="bg-violet-600 text-white hover:bg-violet-600">
+            <Sparkles size={12} /> Gemini 2.5 Flash
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-6 p-6 lg:grid-cols-[1fr_320px]">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={getStatusVariant(status)}>{formatStatus(status, t)}</Badge>
+            <Badge variant="outline">
+              {affectedSensors.length} {t("affectedSensors")}
+            </Badge>
+          </div>
+          <h3 className="mt-4 text-sm font-bold uppercase tracking-widest text-slate-400">
+            {t("analysisSummary")}
+          </h3>
+          <p className="mt-2 text-base font-semibold leading-7 text-slate-700 dark:text-slate-200">
+            {affectedSensors.length === 0
+              ? t("categoryAiSafeSummary")
+              : `${affectedSensors.length} ${t("categorySensorsNeedAttention")} ${[...new Set(affectedSensors.map((sensor) => sensor.lokasi))].join(", ")}. ${t("dominantParameters")}: ${dominantParameters.join(", ") || "-"}.`}
+          </p>
+
+          {affectedSensors.length > 0 && (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {affectedSensors.slice(0, 4).map((sensor) => (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60" key={sensor.sensor_id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-slate-950 dark:text-white">
+                      {sensor.sensor_id}
+                    </span>
+                    <SensorStatus status={sensor.status} />
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {sensor.lokasi}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-300">
+            {t("recommendedSteps")}
+          </p>
+          <ol className="mt-4 space-y-3">
+            {recommendations.map((recommendation, index) => (
+              <li className="flex gap-3" key={recommendation}>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
+                  {index + 1}
+                </span>
+                <span className="text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200">
+                  {recommendation}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-5 border-t border-violet-100 pt-4 text-xs leading-5 text-slate-500 dark:border-violet-900/50 dark:text-slate-400">
+            {t("aiIntegrationNotice")}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function getDominantParameters(sensors: SensorAnalysis[]) {
+  return [...new Set(
+    sensors.flatMap((sensor) =>
+      (sensor.params ?? [])
+        .filter((param) => Number(param.derajat?.Tinggi ?? 0) > 0)
+        .map((param) => param.param),
+    ),
+  )].slice(0, 4);
+}
+
+function getCategoryRecommendations(
+  type: CategoryType,
+  status: DashboardStatus,
+  t: (key: TranslationKey) => string,
+) {
+  if (status === "AMAN") {
+    return [t("keepMonitoring"), t("verifySensor"), t("documentCondition")];
+  }
+  if (type === "debu") {
+    return [t("waterHaulingRoad"), t("inspectDustControl"), t("limitDustExposure")];
+  }
+  if (type === "gas") {
+    return [t("increaseAreaVentilation"), t("inspectGasLeak"), t("limitGasAreaAccess")];
+  }
+  return [t("inspectHeavyEquipmentEmission"), t("reduceEquipmentOperation"), t("repeatEmissionTest")];
+}
+
 function TrendPanel({
+  currentParameters,
   data,
   isRealtime,
 }: {
+  currentParameters: NonNullable<SensorAnalysis["params"]>;
   data: AnalysisHistoryPoint[];
   isRealtime: boolean;
 }) {
@@ -660,11 +798,7 @@ function TrendPanel({
                   tickLine={false}
                 />
                 <Tooltip
-                  contentStyle={{
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "1rem",
-                    boxShadow: "0 18px 40px -24px rgb(15 23 42 / 0.55)",
-                  }}
+                  content={<TrendTooltip fallbackParameters={currentParameters} />}
                 />
                 <Area
                   dataKey="crisp"
@@ -688,6 +822,73 @@ function TrendPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function TrendTooltip({
+  active,
+  fallbackParameters,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  fallbackParameters: NonNullable<SensorAnalysis["params"]>;
+  label?: number | string;
+  payload?: ReadonlyArray<{ payload?: AnalysisHistoryPoint }>;
+}) {
+  const { t } = useLanguage();
+  const point = payload?.[0]?.payload;
+  const usingCurrentSnapshot =
+    !point?.parameters || Object.keys(point.parameters).length === 0;
+  const parameters =
+    point?.parameters && Object.keys(point.parameters).length > 0
+      ? point.parameters
+      : Object.fromEntries(
+          fallbackParameters.map((parameter) => [
+            parameter.param,
+            Number(parameter.nilai),
+          ]),
+        );
+
+  if (!active || !point) return null;
+
+  return (
+    <div className="min-w-48 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+      <p className="text-xs font-bold text-slate-400">{label}</p>
+      <div className="mt-3 flex items-center justify-between gap-6">
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">
+          Status Result
+        </span>
+        <span className="text-sm font-bold text-sky-600 dark:text-sky-300">
+          {point.crisp ?? 0}
+        </span>
+      </div>
+
+      {Object.keys(parameters).length > 0 && (
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <p className="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            {t("sensorReadings")}
+          </p>
+          {usingCurrentSnapshot && (
+            <p className="mb-2 text-[9px] font-medium text-amber-600 dark:text-amber-300">
+              {t("latestSnapshotFallback")}
+            </p>
+          )}
+          <div className="space-y-2">
+            {Object.entries(parameters).map(([parameter, value]) => (
+              <div className="flex items-center justify-between gap-6" key={parameter}>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-300">
+                  {parameter}
+                </span>
+                <span className="text-xs font-bold text-slate-950 dark:text-white">
+                  {formatParameterValue(parameter, value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -781,11 +982,7 @@ function ParameterCard({
 }) {
   const { t } = useLanguage();
   const degrees = param.derajat ?? {};
-  const degreeLabels = [
-    { source: "Rendah", label: t("low") },
-    { source: "Sedang", label: t("medium") },
-    { source: "Tinggi", label: t("high") },
-  ];
+  const riskProgress = calculateRiskProgress(degrees);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/50">
@@ -794,19 +991,10 @@ function ParameterCard({
           {param.param}
         </span>
         <span className="text-sm font-bold text-slate-950 dark:text-white">
-          {param.nilai}
+          {formatParameterValue(param.param, param.nilai)}
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        {degreeLabels.map((item) => (
-          <DegreeBar
-            key={item.source}
-            label={item.label}
-            sourceLabel={item.source}
-            value={Number(degrees[item.source] ?? 0)}
-          />
-        ))}
-      </div>
+      <RiskProgress value={riskProgress} />
       <p className="mt-3 text-[9px] font-semibold uppercase text-slate-400">
         {param.info ||
           (isRealtime
@@ -817,33 +1005,46 @@ function ParameterCard({
   );
 }
 
-function DegreeBar({
-  label,
-  sourceLabel,
-  value,
-}: {
-  label: string;
-  sourceLabel: string;
-  value: number;
-}) {
+function RiskProgress({ value }: { value: number }) {
+  const { t } = useLanguage();
+
   return (
-    <div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-        <div
-          className={cn(
-            "h-full rounded-full",
-            sourceLabel === "Rendah" && "bg-sky-500",
-            sourceLabel === "Sedang" && "bg-emerald-500",
-            sourceLabel === "Tinggi" && "bg-red-500",
-          )}
-          style={{ width: `${Math.min(Math.max(value, 0), 1) * 100}%` }}
+    <div className="space-y-2">
+      <div className="relative">
+        <Progress
+          aria-label={t("riskProgress")}
+          className="h-3 bg-[linear-gradient(to_right,#22c55e_0%,#22c55e_33%,#eab308_33%,#eab308_66%,#ef4444_66%,#ef4444_100%)]"
+          indicatorClassName="border-r-2 border-white bg-white/20 shadow-[2px_0_8px_rgba(255,255,255,0.9)] dark:bg-white/15"
+          value={value}
         />
       </div>
-      <div className="mt-1 text-center text-[8px] font-bold uppercase text-slate-400">
-        {label[0]}: {value}
+      <div className="grid grid-cols-3 text-[8px] font-bold uppercase tracking-wide">
+        <span className="text-left text-emerald-600 dark:text-emerald-300">
+          {t("safe")} · 0–33%
+        </span>
+        <span className="text-center text-amber-600 dark:text-amber-300">
+          {t("alert")} · 34–66%
+        </span>
+        <span className="text-right text-red-600 dark:text-red-300">
+          {t("danger")} · 67–100%
+        </span>
       </div>
+      <p className="text-right text-[9px] font-bold text-slate-500 dark:text-slate-400">
+        {t("riskScore")}: {Math.round(value)}%
+      </p>
     </div>
   );
+}
+
+function calculateRiskProgress(degrees: Record<string, number>) {
+  const low = Number(degrees.Rendah ?? 0);
+  const medium = Number(degrees.Sedang ?? 0);
+  const high = Number(degrees.Tinggi ?? 0);
+  const total = low + medium + high;
+
+  if (total <= 0) return 0;
+
+  return Math.min(100, Math.max(0, (low * 33 + medium * 66 + high * 100) / total));
 }
 
 function SensorStatus({ status }: { status: string }) {
@@ -978,7 +1179,12 @@ function LogicVisualizer({
       </CardHeader>
       <CardContent className="space-y-4">
         {items.map(([key, item]) => (
-          <FuzzyCurve data={item.mf} key={key} title={item.nama} />
+          <FuzzyCurve
+            data={item.mf}
+            key={key}
+            title={item.nama}
+            unit={getParameterUnit(key)}
+          />
         ))}
       </CardContent>
     </Card>

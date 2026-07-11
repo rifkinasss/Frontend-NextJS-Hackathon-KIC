@@ -1389,11 +1389,11 @@ export function SensorStatusClient() {
                       value={catalogInterface}
                       onChange={(e) => setCatalogInterface(e.target.value)}
                     >
-                      <option value="analog">Analog</option>
-                      <option value="digital">Digital</option>
-                      <option value="i2c">I2C</option>
-                      <option value="spi">SPI</option>
-                      <option value="uart">UART</option>
+                      <option value="analog">Analog (GPIO ADC Pin)</option>
+                      <option value="digital">Digital (GPIO I/O Pin)</option>
+                      <option value="i2c">I2C (SDA/SCL Bus)</option>
+                      <option value="spi">SPI Bus</option>
+                      <option value="uart">UART (TX/RX Serial)</option>
                       <option value="onewire">OneWire</option>
                     </select>
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-normal font-medium mt-1">

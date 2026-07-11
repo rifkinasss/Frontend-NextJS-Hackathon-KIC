@@ -14,6 +14,13 @@ import {
   RefreshCcw,
   Search,
   Trash2,
+  Cpu,
+  BookOpen,
+  Info,
+  Calendar,
+  Hash,
+  Network,
+  X,
 } from "lucide-react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Badge } from "@/components/ui/badge";
@@ -37,10 +44,19 @@ import {
 import { fetchAnalysis } from "@/lib/api/analysis";
 import { fetchDeviceStates, sendDeviceCommand, createDevice, updateDevice, deleteDevice } from "@/lib/api/devices";
 import { fetchLocations } from "@/lib/api/locations";
+import {
+  fetchSensorDefinitions,
+  createSensorDefinition,
+  deleteSensorDefinition,
+  fetchDeviceSensors,
+  mapSensorToDevice,
+  unmapSensorFromDevice,
+} from "@/lib/api/sensors";
 import { cn } from "@/lib/utils";
 import type { AnalysisResponse, SensorAnalysis } from "@/types/analysis";
 import type { DeviceCommandName, DeviceState } from "@/types/device";
 import type { MonitoringLocation, MonitoringLocationType } from "@/types/location";
+import type { SensorDefinition, DeviceSensorMapping } from "@/types/sensor";
 
 type SensorConnection = "online" | "offline";
 type ConnectionFilter = "all" | SensorConnection;
@@ -80,6 +96,143 @@ export function SensorStatusClient() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [deviceType, setDeviceType] = useState<MonitoringLocationType>("Debu");
+
+  // Sensor Management States
+  const [detailTab, setDetailTab] = useState<"info" | "sensors">("info");
+  const [mappedSensors, setMappedSensors] = useState<DeviceSensorMapping[]>([]);
+  const [loadingMapped, setLoadingMapped] = useState(false);
+  const [sensorCatalog, setSensorCatalog] = useState<SensorDefinition[]>([]);
+  
+  // Catalog Modal States
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+  const [isCatalogSubmitting, setIsCatalogSubmitting] = useState(false);
+  
+  // New Sensor Definition Form States
+  const [catalogCode, setCatalogCode] = useState("");
+  const [catalogName, setCatalogName] = useState("");
+  const [catalogMfg, setCatalogMfg] = useState("");
+  const [catalogInterface, setCatalogInterface] = useState("analog");
+  const [catalogDesc, setCatalogDesc] = useState("");
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  // Map Sensor to Device Form States
+  const [mapSensorDefId, setMapSensorDefId] = useState<string>("");
+  const [mapGpio, setMapGpio] = useState("");
+  const [mapI2c, setMapI2c] = useState("");
+  const [mapNotes, setMapNotes] = useState("");
+  const [isMappingSubmitting, setIsMappingSubmitting] = useState(false);
+  const [mappingError, setMappingError] = useState<string | null>(null);
+
+  const loadSensorCatalog = useCallback(async () => {
+    try {
+      const data = await fetchSensorDefinitions();
+      setSensorCatalog(data);
+    } catch (err) {
+      console.error("Gagal memuat katalog sensor:", err);
+    }
+  }, []);
+
+  const handleCreateSensorDefinition = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!catalogCode.trim() || !catalogName.trim()) {
+        setCatalogError("Kode Sensor dan Nama Sensor wajib diisi");
+        return;
+      }
+
+      setIsCatalogSubmitting(true);
+      setCatalogError(null);
+
+      try {
+        await createSensorDefinition({
+          sensor_code: catalogCode.trim(),
+          sensor_name: catalogName.trim(),
+          manufacturer: catalogMfg.trim() || undefined,
+          interface_type: catalogInterface,
+          description: catalogDesc.trim() || undefined,
+        });
+
+        // Reset catalog form
+        setCatalogCode("");
+        setCatalogName("");
+        setCatalogMfg("");
+        setCatalogInterface("analog");
+        setCatalogDesc("");
+        
+        await loadSensorCatalog();
+      } catch (err) {
+        setCatalogError(err instanceof Error ? err.message : "Gagal membuat tipe sensor");
+      } finally {
+        setIsCatalogSubmitting(false);
+      }
+    },
+    [catalogCode, catalogName, catalogMfg, catalogInterface, catalogDesc, loadSensorCatalog]
+  );
+
+  const handleDeleteSensorDefinition = useCallback(
+    async (id: number) => {
+      if (!confirm("Apakah Anda yakin ingin menghapus tipe sensor ini dari katalog?")) return;
+      try {
+        await deleteSensorDefinition(id);
+        await loadSensorCatalog();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Gagal menghapus sensor dari katalog");
+      }
+    },
+    [loadSensorCatalog]
+  );
+
+  const handleMapSensor = useCallback(
+    async (e: React.FormEvent, deviceId: string) => {
+      e.preventDefault();
+      if (!mapSensorDefId) {
+        setMappingError("Silakan pilih sensor dari katalog");
+        return;
+      }
+
+      setIsMappingSubmitting(true);
+      setMappingError(null);
+
+      try {
+        await mapSensorToDevice(deviceId, {
+          sensor_def_id: parseInt(mapSensorDefId),
+          gpio_pin: mapGpio.trim() || undefined,
+          i2c_address: mapI2c.trim() || undefined,
+          notes: mapNotes.trim() || undefined,
+        });
+
+        // Reset form
+        setMapSensorDefId("");
+        setMapGpio("");
+        setMapI2c("");
+        setMapNotes("");
+
+        // Refresh device sensors
+        const updated = await fetchDeviceSensors(deviceId);
+        setMappedSensors(updated);
+      } catch (err) {
+        setMappingError(err instanceof Error ? err.message : "Gagal memasang sensor");
+      } finally {
+        setIsMappingSubmitting(false);
+      }
+    },
+    [mapSensorDefId, mapGpio, mapI2c, mapNotes]
+  );
+
+  const handleUnmapSensor = useCallback(
+    async (mappingId: number, deviceId: string) => {
+      if (!confirm("Apakah Anda yakin ingin mencopot sensor ini dari device?")) return;
+      try {
+        await unmapSensorFromDevice(mappingId);
+        // Refresh device sensors
+        const updated = await fetchDeviceSensors(deviceId);
+        setMappedSensors(updated);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Gagal mencopot sensor");
+      }
+    },
+    []
+  );
 
   const generateDeviceCode = useCallback((type: MonitoringLocationType) => {
     const prefixes = { Debu: "DB", Gas: "GS", Emisi: "EM", Campuran: "CP" };
@@ -215,8 +368,15 @@ export function SensorStatusClient() {
 
   const openDetailModal = useCallback((row: SensorStatusRow) => {
     setSelectedRow(row);
+    setDetailTab("info");
     setIsDetailModalOpen(true);
-  }, []);
+    setLoadingMapped(true);
+    fetchDeviceSensors(row.location.id)
+      .then((data) => setMappedSensors(data))
+      .catch((err) => console.error("Gagal memuat sensor terpasang:", err))
+      .finally(() => setLoadingMapped(false));
+    loadSensorCatalog();
+  }, [loadSensorCatalog]);
 
   const openEditModal = useCallback((row: SensorStatusRow) => {
     setSelectedRow(row);
@@ -354,6 +514,17 @@ export function SensorStatusClient() {
                   >
                     <Plus size={16} />
                     {t("addDevice") || "Tambah Alat"}
+                  </Button>
+                  <Button
+                    className="h-12 w-full rounded-xl border border-slate-200 hover:bg-slate-100 bg-white text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-800 gap-2 flex items-center justify-center font-bold"
+                    onClick={() => {
+                      loadSensorCatalog();
+                      setIsCatalogModalOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <BookOpen size={16} />
+                    Katalog Sensor
                   </Button>
                   <Button
                     className="h-12 w-full rounded-xl"
@@ -708,63 +879,251 @@ export function SensorStatusClient() {
       {/* Detail Modal */}
       {isDetailModalOpen && selectedRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <Card className="w-full max-w-md overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+          <Card className="w-full max-w-lg overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
             <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
-              <CardTitle className="text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
-                <Eye size={20} className="text-sky-500" />
-                Detail Perangkat
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                  <Eye size={20} className="text-sky-500" />
+                  Detail Perangkat
+                </CardTitle>
+                <div className="flex bg-slate-200/60 dark:bg-slate-800 rounded-xl p-1 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("info")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg transition-all flex items-center gap-1",
+                      detailTab === "info"
+                        ? "bg-white dark:bg-slate-950 shadow-sm text-slate-950 dark:text-white"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    )}
+                  >
+                    <Info size={12} />
+                    Informasi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("sensors")}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg transition-all flex items-center gap-1",
+                      detailTab === "sensors"
+                        ? "bg-white dark:bg-slate-950 shadow-sm text-slate-950 dark:text-white"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    )}
+                  >
+                    <Cpu size={12} />
+                    Sensor ({mappedSensors.length})
+                  </button>
+                </div>
+              </div>
               <CardDescription>
-                Informasi detail spesifikasi dan penempatan alat.
+                Kelola informasi dan sensor terpasang pada perangkat: <span className="font-bold">{selectedRow.location.id}</span>
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-6 space-y-4 text-xs font-semibold">
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">ID / KODE ALAT</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.id}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">NAMA ALAT</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.name}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">TIPE ALAT</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200">
-                  <Badge variant="outline">{formatType(selectedRow.location.type, t)}</Badge>
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">LOKASI</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200">{selectedRow.location.location || selectedRow.location.name}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">KOORDINAT GPS</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200">
-                  Lat: {selectedRow.location.lat}, Lng: {selectedRow.location.lng}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">STATUS DAYA</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200 uppercase">{selectedRow.state?.power_state || "ON"}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">KONEKTIVITAS</span>
-                <span className="col-span-2">
-                  <ConnectionBadge connection={selectedRow.connection} />
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
-                <span className="text-slate-400">BATERAI & RSSI</span>
-                <span className="col-span-2 text-slate-800 dark:text-slate-200">
-                  Volt: {selectedRow.state?.battery_voltage != null ? `${selectedRow.state.battery_voltage} V` : "-"}, RSSI: {selectedRow.state?.wifi_rssi != null ? `${selectedRow.state.wifi_rssi} dBm` : "-"}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <span className="text-slate-400">DESKRIPSI</span>
-                <span className="col-span-2 text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
-                  {selectedRow.location.description || "-"}
-                </span>
-              </div>
+            <CardContent className="p-6 max-h-[60vh] overflow-y-auto space-y-4">
+              {detailTab === "info" ? (
+                <div className="space-y-4 text-xs font-semibold">
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">ID / KODE ALAT</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.id}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">NAMA ALAT</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.name}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">TIPE ALAT</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200">
+                      <Badge variant="outline">{formatType(selectedRow.location.type, t)}</Badge>
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">LOKASI</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200">{selectedRow.location.location || selectedRow.location.name}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">KOORDINAT GPS</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">
+                      Lat: {selectedRow.location.lat}, Lng: {selectedRow.location.lng}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">STATUS DAYA</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200 uppercase">{selectedRow.state?.power_state || "ON"}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">KONEKTIVITAS</span>
+                    <span className="col-span-2">
+                      <ConnectionBadge connection={selectedRow.connection} />
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                    <span className="text-slate-400">BATERAI & RSSI</span>
+                    <span className="col-span-2 text-slate-800 dark:text-slate-200">
+                      Volt: {selectedRow.state?.battery_voltage != null ? `${selectedRow.state.battery_voltage} V` : "-"}, RSSI: {selectedRow.state?.wifi_rssi != null ? `${selectedRow.state.wifi_rssi} dBm` : "-"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <span className="text-slate-400">DESKRIPSI</span>
+                    <span className="col-span-2 text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                      {selectedRow.location.description || "-"}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* List of Mapped Sensors */}
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Daftar Sensor Terpasang
+                    </h4>
+                    {loadingMapped ? (
+                      <div className="flex justify-center py-6 text-slate-400">
+                        <Loader2 className="animate-spin" size={20} />
+                      </div>
+                    ) : mappedSensors.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-6 text-center text-xs font-semibold text-slate-400 dark:border-slate-800 dark:bg-slate-950/20">
+                        Belum ada sensor yang dikaitkan ke device ini.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {mappedSensors.map((mapping) => (
+                          <div
+                            key={mapping.id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white">
+                                  {mapping.sensor_name}
+                                </span>
+                                 <Badge variant="outline" className="text-[9px] uppercase font-black px-1.5 py-0 bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                                   {mapping.sensor_code}
+                                 </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-x-3 text-[10px] text-slate-400 font-bold">
+                                {mapping.gpio_pin && (
+                                  <span className="flex items-center gap-1">
+                                    <Network size={10} /> {mapping.gpio_pin}
+                                  </span>
+                                )}
+                                {mapping.i2c_address && (
+                                  <span className="flex items-center gap-1">
+                                    <Hash size={10} /> {mapping.i2c_address}
+                                  </span>
+                                )}
+                                {mapping.install_date && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar size={10} /> {mapping.install_date}
+                                  </span>
+                                )}
+                              </div>
+                              {mapping.notes && (
+                                <p className="text-[10px] text-slate-500 font-medium leading-relaxed italic">
+                                  Note: {mapping.notes}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              className="h-8 w-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-none shrink-0"
+                              onClick={() => handleUnmapSensor(mapping.id, selectedRow.location.id)}
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Form to Map New Sensor */}
+                  <form
+                    onSubmit={(e) => handleMapSensor(e, selectedRow.location.id)}
+                    className="border-t border-slate-200 pt-4 space-y-3 dark:border-slate-800"
+                  >
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Pasang Sensor Baru
+                    </h4>
+                    {mappingError && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                        {mappingError}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5 col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Pilih Sensor *
+                        </label>
+                        <select
+                          required
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                          value={mapSensorDefId}
+                          onChange={(e) => setMapSensorDefId(e.target.value)}
+                        >
+                          <option value="">-- Pilih Sensor Katalog --</option>
+                          {sensorCatalog.map((def) => (
+                            <option key={def.id} value={def.id}>
+                              {def.sensor_name} ({def.sensor_code}) - {def.interface_type || "N/A"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          GPIO Pin (Opsional)
+                        </label>
+                        <input
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                          value={mapGpio}
+                          onChange={(e) => setMapGpio(e.target.value)}
+                          placeholder="Contoh: GPIO4"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          I2C Address (Opsional)
+                        </label>
+                        <input
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                          value={mapI2c}
+                          onChange={(e) => setMapI2c(e.target.value)}
+                          placeholder="Contoh: 0x68"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 col-span-2">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          Catatan
+                        </label>
+                        <input
+                          className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                          value={mapNotes}
+                          onChange={(e) => setMapNotes(e.target.value)}
+                          placeholder="Catatan penempatan pin, kalibrasi, dll."
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={isMappingSubmitting}
+                      className="w-full h-10 bg-sky-600 hover:bg-sky-500 text-white border-none mt-2"
+                    >
+                      {isMappingSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Memasang...
+                        </>
+                      ) : (
+                        "Pasang Sensor ke Alat"
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              )}
             </CardContent>
             <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
               <Button type="button" onClick={() => setIsDetailModalOpen(false)}>
@@ -950,6 +1309,188 @@ export function SensorStatusClient() {
                 ) : (
                   "Ya, Hapus"
                 )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Katalog Sensor Modal */}
+      {isCatalogModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-2xl overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                  <BookOpen size={20} className="text-sky-500" />
+                  Katalog Sensor Pendukung
+                </CardTitle>
+                <CardDescription>
+                  Daftarkan dan kelola tipe-tipe sensor yang didukung oleh sistem.
+                </CardDescription>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 rounded-full border-none"
+                onClick={() => setIsCatalogModalOpen(false)}
+              >
+                <X size={16} />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+              {/* Form Tambah Sensor Baru */}
+              <form onSubmit={handleCreateSensorDefinition} className="bg-slate-50 p-4 rounded-xl border border-slate-200 dark:bg-slate-950/40 dark:border-slate-800 space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Tambah Tipe Sensor Baru ke Katalog
+                </h4>
+                {catalogError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                    {catalogError}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Kode Sensor *
+                    </label>
+                    <input
+                      required
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-700"
+                      value={catalogCode}
+                      onChange={(e) => setCatalogCode(e.target.value)}
+                      placeholder="Contoh: DS3231"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Nama Sensor *
+                    </label>
+                    <input
+                      required
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-700"
+                      value={catalogName}
+                      onChange={(e) => setCatalogName(e.target.value)}
+                      placeholder="Contoh: DS3231 Real-Time Clock"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Antarmuka / Interface
+                    </label>
+                    <select
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none focus:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                      value={catalogInterface}
+                      onChange={(e) => setCatalogInterface(e.target.value)}
+                    >
+                      <option value="analog">Analog</option>
+                      <option value="digital">Digital</option>
+                      <option value="i2c">I2C</option>
+                      <option value="spi">SPI</option>
+                      <option value="uart">UART</option>
+                      <option value="onewire">OneWire</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Produsen / Manufacturer
+                    </label>
+                    <input
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-700"
+                      value={catalogMfg}
+                      onChange={(e) => setCatalogMfg(e.target.value)}
+                      placeholder="Contoh: Maxim Integrated"
+                    />
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Deskripsi Sensor
+                    </label>
+                    <input
+                      className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-slate-700"
+                      value={catalogDesc}
+                      onChange={(e) => setCatalogDesc(e.target.value)}
+                      placeholder="Contoh: Modul I2C RTC dengan akurasi sangat tinggi."
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="submit"
+                    disabled={isCatalogSubmitting}
+                    className="bg-sky-600 hover:bg-sky-500 text-white border-none h-9 text-xs px-4"
+                  >
+                    {isCatalogSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        Mendaftarkan...
+                      </>
+                    ) : (
+                      "Tambah ke Katalog"
+                    )}
+                  </Button>
+                </div>
+              </form>
+
+              {/* Daftar Sensor Katalog */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Daftar Tipe Sensor Pendukung
+                </h4>
+                {sensorCatalog.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-8 text-center text-xs font-semibold text-slate-400 dark:border-slate-800 dark:bg-slate-950/20">
+                    Katalog sensor kosong. Silakan tambah sensor baru.
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden dark:border-slate-800">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Kode</TableHead>
+                          <TableHead>Nama Sensor</TableHead>
+                          <TableHead className="w-24 text-center">Interface</TableHead>
+                          <TableHead className="w-32">Produsen</TableHead>
+                          <TableHead className="w-16 text-right"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="text-xs font-semibold">
+                        {sensorCatalog.map((def) => (
+                          <TableRow key={def.id}>
+                            <TableCell className="font-bold text-slate-900 dark:text-white">
+                              <Badge variant="outline">{def.sensor_code}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-bold text-slate-800 dark:text-slate-200">{def.sensor_name}</p>
+                                {def.description && (
+                                  <p className="text-[10px] font-medium text-slate-400 mt-0.5">{def.description}</p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center capitalize text-[10px] text-sky-600 dark:text-sky-400 font-bold">
+                              {def.interface_type || "N/A"}
+                            </TableCell>
+                            <TableCell className="text-slate-500 font-medium">{def.manufacturer || "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="icon"
+                                className="h-7 w-7 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-none animate-in fade-in"
+                                onClick={() => handleDeleteSensorDefinition(def.id)}
+                              >
+                                <Trash2 size={12} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <Button type="button" onClick={() => setIsCatalogModalOpen(false)}>
+                Tutup
               </Button>
             </div>
           </Card>

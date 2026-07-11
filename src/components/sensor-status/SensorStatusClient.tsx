@@ -1080,6 +1080,9 @@ export function SensorStatusClient() {
                           onChange={(e) => setMapGpio(e.target.value)}
                           placeholder="Contoh: GPIO4"
                         />
+                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-normal font-medium mt-1">
+                          Pin jalur data digital/analog pada ESP32.
+                        </p>
                       </div>
 
                       <div className="space-y-1.5">
@@ -1092,6 +1095,9 @@ export function SensorStatusClient() {
                           onChange={(e) => setMapI2c(e.target.value)}
                           placeholder="Contoh: 0x68"
                         />
+                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-normal font-medium mt-1">
+                          Alamat I2C jika memakai modul addressable.
+                        </p>
                       </div>
 
                       <div className="space-y-1.5 col-span-2">
@@ -1390,6 +1396,9 @@ export function SensorStatusClient() {
                       <option value="uart">UART</option>
                       <option value="onewire">OneWire</option>
                     </select>
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-normal font-medium mt-1">
+                      Jenis jalur komunikasi sensor ke mikrokontroler.
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -1401,6 +1410,9 @@ export function SensorStatusClient() {
                       onChange={(e) => setCatalogMfg(e.target.value)}
                       placeholder="Contoh: Maxim Integrated"
                     />
+                    <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-normal font-medium mt-1">
+                      Nama perusahaan pembuat sensor (opsional).
+                    </p>
                   </div>
                   <div className="space-y-1.5 col-span-2">
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">

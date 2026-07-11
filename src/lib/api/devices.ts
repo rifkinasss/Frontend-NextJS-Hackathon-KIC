@@ -42,3 +42,31 @@ export async function sendDeviceCommand(
   const result = (await response.json()) as { data: DeviceCommand };
   return result.data;
 }
+
+export async function updateDevice(
+  deviceId: string,
+  data: {
+    device_name?: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
+    is_active?: boolean;
+  }
+): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices/${deviceId}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gagal memperbarui data device (${response.status})`);
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+

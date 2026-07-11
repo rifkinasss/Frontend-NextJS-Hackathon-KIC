@@ -6,6 +6,9 @@ export type DeviceState = {
   device_id: string;
   is_online: boolean;
   power_state: DevicePowerState;
+  battery_voltage?: number | null;
+  wifi_rssi?: number | null;
+  uptime_seconds?: number | null;
   last_seen_at: string | null;
   last_command_at: string | null;
   updated_at: string | null;

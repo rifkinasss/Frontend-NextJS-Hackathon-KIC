@@ -21,12 +21,14 @@ const markerColors: Record<MonitoringLocationType, string> = {
   Debu: "#0ea5e9",
   Emisi: "#10b981",
   Gas: "#f97316",
+  Campuran: "#8b5cf6",
 };
 
 const icons = {
   Debu: createIcon(markerColors.Debu),
   Emisi: createIcon(markerColors.Emisi),
   Gas: createIcon(markerColors.Gas),
+  Campuran: createIcon(markerColors.Campuran),
 };
 
 function createIcon(color: string) {
@@ -256,7 +258,8 @@ function formatLocationType(
 ) {
   if (type === "Debu") return t("mineDust");
   if (type === "Gas") return t("mineGas");
-  return t("heavyEquipmentEmission");
+  if (type === "Emisi") return t("heavyEquipmentEmission");
+  return "Campuran";
 }
 
 function formatDegreeLabel(label: string, t: (key: TranslationKey) => string) {

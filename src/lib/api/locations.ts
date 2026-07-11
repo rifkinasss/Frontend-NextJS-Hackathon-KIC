@@ -28,9 +28,12 @@ export async function fetchLocations(
 
   return rawData.map((loc: any) => ({
     id: loc.id,
+    device_code: loc.device_code,
     name: loc.name || loc.device_code || "",
+    location: loc.location,
     type: loc.type || getDeviceType(loc.device_code || ""),
     lat: loc.lat || 0,
     lng: loc.lng || 0,
+    description: loc.description,
   }));
 }

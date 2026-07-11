@@ -4,12 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Edit,
+  Eye,
   Loader2,
   MapPin,
+  Plus,
   Power,
   RadioTower,
   RefreshCcw,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchAnalysis } from "@/lib/api/analysis";
-import { fetchDeviceStates, sendDeviceCommand } from "@/lib/api/devices";
+import { fetchDeviceStates, sendDeviceCommand, createDevice, updateDevice, deleteDevice } from "@/lib/api/devices";
 import { fetchLocations } from "@/lib/api/locations";
 import { cn } from "@/lib/utils";
 import type { AnalysisResponse, SensorAnalysis } from "@/types/analysis";
@@ -65,6 +69,32 @@ export function SensorStatusClient() {
   const [states, setStates] = useState<DeviceState[]>([]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [formCode, setFormCode] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formLocation, setFormLocation] = useState("");
+  const [formLat, setFormLat] = useState("");
+  const [formLng, setFormLng] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [deviceType, setDeviceType] = useState<MonitoringLocationType>("Debu");
+
+  const generateDeviceCode = useCallback((type: MonitoringLocationType) => {
+    const prefixes = { Debu: "DB", Gas: "GS", Emisi: "EM", Campuran: "CP" };
+    const prefix = prefixes[type];
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    setFormCode(`${prefix}-${randomSuffix}`);
+  }, []);
+
+  const openAddModal = useCallback(() => {
+    setDeviceType("Debu");
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    setFormCode(`DB-${randomSuffix}`);
+    setIsAddModalOpen(true);
+  }, []);
+
   const loadData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
@@ -86,6 +116,171 @@ export function SensorStatusClient() {
       if (!signal?.aborted) setLoading(false);
     }
   }, []);
+
+  const handleAddDevice = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!formCode.trim() || !formName.trim()) {
+        setSubmitError("Kode Alat dan Nama Alat wajib diisi");
+        return;
+      }
+
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      try {
+        await createDevice({
+          device_code: formCode.trim(),
+          device_name: formName.trim(),
+          location: formLocation.trim() || undefined,
+          latitude: formLat ? parseFloat(formLat) : undefined,
+          longitude: formLng ? parseFloat(formLng) : undefined,
+          description: formDesc.trim() || undefined,
+        });
+
+        setFeedback(`Alat ${formCode.trim()} berhasil ditambahkan!`);
+        setIsAddModalOpen(false);
+
+        // Reset form
+        setFormCode("");
+        setFormName("");
+        setFormLocation("");
+        setFormLat("");
+        setFormLng("");
+        setFormDesc("");
+
+        // Reload data
+        await loadData();
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Gagal menambahkan alat");
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [formCode, formName, formLocation, formLat, formLng, formDesc, loadData]
+  );
+
+  const handleGetCurrentLocation = useCallback((target: "add" | "edit") => {
+    if (!navigator.geolocation) {
+      alert("Browser Anda tidak mendukung layanan geolokasi.");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(6);
+        const lng = position.coords.longitude.toFixed(6);
+
+        if (target === "add") {
+          setFormLat(lat);
+          setFormLng(lng);
+        } else {
+          setEditLat(lat);
+          setEditLng(lng);
+        }
+        setIsLocating(false);
+      },
+      (error) => {
+        let errMsg = "Gagal mengambil lokasi Anda.";
+        if (error.code === error.PERMISSION_DENIED) {
+          errMsg = "Izin geolokasi ditolak oleh browser.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errMsg = "Informasi lokasi tidak tersedia.";
+        } else if (error.code === error.TIMEOUT) {
+          errMsg = "Waktu pengambilan lokasi habis.";
+        }
+        alert(errMsg);
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }, []);
+
+  const [selectedRow, setSelectedRow] = useState<SensorStatusRow | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // States for Edit Form
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editLat, setEditLat] = useState("");
+  const [editLng, setEditLng] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+
+  const openDetailModal = useCallback((row: SensorStatusRow) => {
+    setSelectedRow(row);
+    setIsDetailModalOpen(true);
+  }, []);
+
+  const openEditModal = useCallback((row: SensorStatusRow) => {
+    setSelectedRow(row);
+    setEditName(row.location.name || "");
+    setEditLocation(row.location.location || row.location.name || "");
+    setEditLat(row.location.lat ? String(row.location.lat) : "");
+    setEditLng(row.location.lng ? String(row.location.lng) : "");
+    setEditDesc(row.location.description || "");
+    setIsEditModalOpen(true);
+  }, []);
+
+  const openDeleteConfirm = useCallback((row: SensorStatusRow) => {
+    setSelectedRow(row);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const handleEditDeviceSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedRow) return;
+
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      try {
+        await updateDevice(selectedRow.location.id, {
+          device_name: editName.trim(),
+          location: editLocation.trim() || undefined,
+          latitude: editLat ? parseFloat(editLat) : undefined,
+          longitude: editLng ? parseFloat(editLng) : undefined,
+        });
+
+        setFeedback(`Alat ${selectedRow.location.id} berhasil diperbarui!`);
+        setIsEditModalOpen(false);
+        setSelectedRow(null);
+        await loadData();
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Gagal memperbarui alat");
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [selectedRow, editName, editLocation, editLat, editLng, loadData]
+  );
+
+  const handleDeleteDeviceSubmit = useCallback(async () => {
+    if (!selectedRow) return;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await deleteDevice(selectedRow.location.id, true); // hard delete
+      setFeedback(`Alat ${selectedRow.location.id} berhasil dihapus!`);
+      setIsDeleteConfirmOpen(false);
+      setSelectedRow(null);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menghapus alat");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [selectedRow, loadData]);
+
 
   const handleCommand = useCallback(
     async (deviceId: string, command: DeviceCommandName) => {
@@ -151,18 +346,28 @@ export function SensorStatusClient() {
                 <p className="text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
                   {t("sensorConnectivityDescription")}
                 </p>
-                <Button
-                  className="h-12 w-full rounded-xl"
-                  onClick={() => void loadData()}
-                  type="button"
-                  variant="outline"
-                >
-                  <RefreshCcw
-                    className={loading ? "animate-spin" : ""}
-                    size={16}
-                  />
-                  {t("refreshStatus")}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="h-12 w-full rounded-xl bg-sky-600 text-white hover:bg-sky-500 border-none"
+                    onClick={openAddModal}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    {t("addDevice") || "Tambah Alat"}
+                  </Button>
+                  <Button
+                    className="h-12 w-full rounded-xl"
+                    onClick={() => void loadData()}
+                    type="button"
+                    variant="outline"
+                  >
+                    <RefreshCcw
+                      className={loading ? "animate-spin" : ""}
+                      size={16}
+                    />
+                    {t("refreshStatus")}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -235,6 +440,7 @@ export function SensorStatusClient() {
                 <TableHead>{t("latestCondition")}</TableHead>
                 <TableHead className="text-right">{t("lastReading")}</TableHead>
                 <TableHead className="text-right">{t("commandAction")}</TableHead>
+                <TableHead className="text-right">{t("action") || "Aksi"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -293,12 +499,462 @@ export function SensorStatusClient() {
                       powerState={row.state?.power_state ?? "on"}
                     />
                   </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className="h-8 w-8 rounded-full"
+                        onClick={() => openDetailModal(row)}
+                        title="Detail"
+                        type="button"
+                      >
+                        <Eye size={13} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className="h-8 w-8 rounded-full"
+                        onClick={() => openEditModal(row)}
+                        title="Edit"
+                        type="button"
+                      >
+                        <Edit size={13} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-none"
+                        onClick={() => openDeleteConfirm(row)}
+                        title="Hapus"
+                        type="button"
+                      >
+                        <Trash2 size={13} />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+              <CardTitle className="text-xl font-bold text-slate-950 dark:text-white">
+                Tambah Alat Baru
+              </CardTitle>
+              <CardDescription>
+                Daftarkan perangkat ESP32 baru ke dalam sistem monitoring.
+              </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleAddDevice}>
+              <CardContent className="p-6 space-y-4">
+                {submitError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                    {submitError}
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Tipe Alat *
+                    </label>
+                    <select
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      value={deviceType}
+                      onChange={(e) => {
+                        const type = e.target.value as MonitoringLocationType;
+                        setDeviceType(type);
+                        generateDeviceCode(type);
+                      }}
+                    >
+                      <option value="Debu">Debu (DB)</option>
+                      <option value="Gas">Gas (GS)</option>
+                      <option value="Emisi">Emisi (EM)</option>
+                      <option value="Campuran">Campuran (CP)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex text-[10px] font-bold uppercase tracking-widest text-slate-400 items-center justify-between">
+                      <span>Kode Alat *</span>
+                      <button
+                        type="button"
+                        onClick={() => generateDeviceCode(deviceType)}
+                        className="text-[9px] text-sky-500 hover:text-sky-600 font-bold lowercase tracking-normal"
+                      >
+                        (Auto)
+                      </button>
+                    </label>
+                    <input
+                      required
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setFormCode(e.target.value)}
+                      placeholder="Contoh: DB-7A2B"
+                      value={formCode}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Nama Alat *
+                    </label>
+                    <input
+                      required
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Contoh: Sensor Debu Pit 2"
+                      value={formName}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Lokasi Penempatan
+                  </label>
+                  <input
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                    onChange={(e) => setFormLocation(e.target.value)}
+                    placeholder="Contoh: Area Tambang Utama - Pit 2"
+                    value={formLocation}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Latitude (Garis Lintang)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setFormLat(e.target.value)}
+                      placeholder="Contoh: -1.8542"
+                      value={formLat}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Longitude (Garis Bujur)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setFormLng(e.target.value)}
+                      placeholder="Contoh: 116.2156"
+                      value={formLng}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 text-xs rounded-xl flex items-center justify-center gap-1.5 border-dashed"
+                  onClick={() => handleGetCurrentLocation("add")}
+                  disabled={isLocating}
+                >
+                  <MapPin size={14} className={isLocating ? "animate-bounce" : ""} />
+                  {isLocating ? "Mendapatkan Lokasi..." : "Gunakan Lokasi Saya"}
+                </Button>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Deskripsi Perangkat
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700 resize-none"
+                    onChange={(e) => setFormDesc(e.target.value)}
+                    placeholder="Tulis penjelasan singkat mengenai peran atau penempatan alat..."
+                    value={formDesc}
+                  />
+                </div>
+              </CardContent>
+              <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-sky-600 hover:bg-sky-500 text-white border-none"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    "Daftarkan Alat"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {isDetailModalOpen && selectedRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-md overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+              <CardTitle className="text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                <Eye size={20} className="text-sky-500" />
+                Detail Perangkat
+              </CardTitle>
+              <CardDescription>
+                Informasi detail spesifikasi dan penempatan alat.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 text-xs font-semibold">
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">ID / KODE ALAT</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.id}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">NAMA ALAT</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200 font-bold">{selectedRow.location.name}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">TIPE ALAT</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200">
+                  <Badge variant="outline">{formatType(selectedRow.location.type, t)}</Badge>
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">LOKASI</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200">{selectedRow.location.location || selectedRow.location.name}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">KOORDINAT GPS</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200">
+                  Lat: {selectedRow.location.lat}, Lng: {selectedRow.location.lng}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">STATUS DAYA</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200 uppercase">{selectedRow.state?.power_state || "ON"}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">KONEKTIVITAS</span>
+                <span className="col-span-2">
+                  <ConnectionBadge connection={selectedRow.connection} />
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+                <span className="text-slate-400">BATERAI & RSSI</span>
+                <span className="col-span-2 text-slate-800 dark:text-slate-200">
+                  Volt: {selectedRow.state?.battery_voltage != null ? `${selectedRow.state.battery_voltage} V` : "-"}, RSSI: {selectedRow.state?.wifi_rssi != null ? `${selectedRow.state.wifi_rssi} dBm` : "-"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-slate-400">DESKRIPSI</span>
+                <span className="col-span-2 text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                  {selectedRow.location.description || "-"}
+                </span>
+              </div>
+            </CardContent>
+            <div className="flex items-center justify-end border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <Button type="button" onClick={() => setIsDetailModalOpen(false)}>
+                Tutup
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {isEditModalOpen && selectedRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+              <CardTitle className="text-xl font-bold text-slate-950 dark:text-white flex items-center gap-2">
+                <Edit size={20} className="text-sky-500" />
+                Edit Informasi Alat
+              </CardTitle>
+              <CardDescription>
+                Perbarui detail penempatan dan koordinat untuk alat: <span className="font-bold">{selectedRow.location.id}</span>
+              </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleEditDeviceSubmit}>
+              <CardContent className="p-6 space-y-4">
+                {submitError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                    {submitError}
+                  </div>
+                )}
+                
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Nama Alat *
+                  </label>
+                  <input
+                    required
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Contoh: Sensor Debu Pit 2"
+                    value={editName}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Lokasi Penempatan
+                  </label>
+                  <input
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                    onChange={(e) => setEditLocation(e.target.value)}
+                    placeholder="Contoh: Area Tambang Utama - Pit 2"
+                    value={editLocation}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Latitude (Garis Lintang)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setEditLat(e.target.value)}
+                      placeholder="Contoh: -1.8542"
+                      value={editLat}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Longitude (Garis Bujur)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700"
+                      onChange={(e) => setEditLng(e.target.value)}
+                      placeholder="Contoh: 116.2156"
+                      value={editLng}
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-10 text-xs rounded-xl flex items-center justify-center gap-1.5 border-dashed"
+                  onClick={() => handleGetCurrentLocation("edit")}
+                  disabled={isLocating}
+                >
+                  <MapPin size={14} className={isLocating ? "animate-bounce" : ""} />
+                  {isLocating ? "Mendapatkan Lokasi..." : "Gunakan Lokasi Saya"}
+                </Button>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Deskripsi Perangkat
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100 dark:focus:border-slate-700 resize-none"
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    placeholder="Deskripsi peran/penempatan alat..."
+                    value={editDesc}
+                  />
+                </div>
+              </CardContent>
+              <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setSelectedRow(null);
+                  }}
+                  disabled={isSubmitting}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-sky-600 hover:bg-sky-500 text-white border-none"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    "Simpan Perubahan"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {isDeleteConfirmOpen && selectedRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-sm overflow-hidden rounded-2xl border-slate-200 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/60">
+              <CardTitle className="text-xl font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                <Trash2 size={20} />
+                Hapus Perangkat?
+              </CardTitle>
+              <CardDescription>
+                Tindakan ini permanen dan tidak dapat dibatalkan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Apakah Anda yakin ingin menghapus alat <span className="font-bold text-slate-950 dark:text-white">{selectedRow.location.name} ({selectedRow.location.id})</span> secara permanen dari sistem?
+              </p>
+            </CardContent>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsDeleteConfirmOpen(false);
+                  setSelectedRow(null);
+                }}
+                disabled={isSubmitting}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                className="bg-red-600 hover:bg-red-500 text-white border-none"
+                onClick={handleDeleteDeviceSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Menghapus...
+                  </>
+                ) : (
+                  "Ya, Hapus"
+                )}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -453,7 +1109,7 @@ function DeviceTableFilters({
         <SelectFilter
           label={t("type")}
           onChange={(value) => setTypeFilter(value as TypeFilter)}
-          options={["all", "Debu", "Gas", "Emisi"]}
+          options={["all", "Debu", "Gas", "Emisi", "Campuran"]}
           value={typeFilter}
         />
 
@@ -609,7 +1265,8 @@ function formatType(
 ) {
   if (type === "Debu") return t("mineDust");
   if (type === "Gas") return t("mineGas");
-  return t("heavyEquipmentEmission");
+  if (type === "Emisi") return t("heavyEquipmentEmission");
+  return "Campuran";
 }
 
 function formatFilterOption(
@@ -620,6 +1277,7 @@ function formatFilterOption(
   if (option === "Debu") return t("mineDust");
   if (option === "Gas") return t("mineGas");
   if (option === "Emisi") return t("heavyEquipmentEmission");
+  if (option === "Campuran") return "Campuran";
   if (option === "online") return t("online");
   if (option === "offline") return t("offline");
   if (option === "on") return "ON";

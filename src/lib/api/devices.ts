@@ -70,3 +70,50 @@ export async function updateDevice(
   return result.data;
 }
 
+export async function createDevice(
+  data: {
+    device_code: string;
+    device_name: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
+    description?: string;
+    firmware_ver?: string;
+  }
+): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Gagal mendaftarkan device (${response.status})`);
+  }
+
+  const result = await response.json();
+  return result.data;
+}
+
+export async function deleteDevice(
+  deviceId: string,
+  hard = true
+): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices/${deviceId}?hard=${hard}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gagal menghapus device (${response.status})`);
+  }
+
+  return response.json();
+}
+

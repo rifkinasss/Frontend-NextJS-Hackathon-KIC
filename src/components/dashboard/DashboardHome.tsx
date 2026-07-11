@@ -319,7 +319,7 @@ function DashboardHeader({
               <HeroFact
                 icon={Cpu}
                 label={t("activeSensors")}
-                value={`${sensorCount || 12}`}
+                value={`${sensorCount || 0}`}
               />
               <HeroFact
                 icon={Clock3}
@@ -467,7 +467,7 @@ function MetricGrid({
     },
     {
       title: t("totalParameters"),
-      value: `${sensorCount || 12} ${t("sensor")}`,
+      value: `${sensorCount || 0} ${t("sensor")}`,
       subtitle: t("fuzzificationActive"),
       icon: Database,
       iconClass: "text-violet-600 dark:text-violet-300",
@@ -498,11 +498,11 @@ function MetricGrid({
     },
     {
       title: t("incomingData"),
-      value: "+142",
+      value: sensorCount > 0 ? "+142" : "0",
       subtitle: t("last24Hours"),
       icon: TrendingUp,
       iconClass: "text-teal-600 dark:text-teal-300",
-      level: 81,
+      level: sensorCount > 0 ? 81 : 0,
       progressClass: "from-teal-500 to-emerald-400",
       softClass: "bg-teal-50 dark:bg-teal-950/40",
     },
@@ -965,7 +965,7 @@ function OperationalPanel({
             <OperationalRow
               icon={CheckCircle2}
               label={t("sensorActive")}
-              value={`${sensorCount || 12} unit`}
+              value={`${sensorCount || 0} unit`}
             />
             <OperationalRow
               icon={BarChart3}

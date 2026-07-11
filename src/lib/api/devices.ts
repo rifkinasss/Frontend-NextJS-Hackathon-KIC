@@ -4,7 +4,7 @@ import type { DeviceCommand, DeviceCommandName, DeviceState } from "@/types/devi
 export async function fetchDeviceStates(
   signal?: AbortSignal,
 ): Promise<DeviceState[]> {
-  const response = await fetch(`${API_BASE_URL}/api/devices/states`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices/states`, {
     signal,
     headers: {
       Accept: "application/json",
@@ -15,14 +15,15 @@ export async function fetchDeviceStates(
     throw new Error(`Gagal mengambil status device (${response.status})`);
   }
 
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }
 
 export async function sendDeviceCommand(
   deviceId: string,
   command: DeviceCommandName,
 ): Promise<DeviceCommand> {
-  const response = await fetch(`${API_BASE_URL}/api/devices/${deviceId}/commands`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices/${deviceId}/commands`, {
     method: "POST",
     headers: {
       Accept: "application/json",

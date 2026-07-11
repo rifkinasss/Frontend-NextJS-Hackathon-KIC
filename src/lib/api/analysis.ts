@@ -9,7 +9,7 @@ export async function fetchAnalysis(
   query: AnalysisQuery,
   signal?: AbortSignal,
 ): Promise<AnalysisResponse> {
-  const url = new URL(`${API_BASE_URL}/analysis`);
+  const url = new URL(`${API_BASE_URL}/api/v1/analysis`);
 
   if (query.mode === "historical" && query.startDate && query.endDate) {
     url.searchParams.set("start", toBackendDate(query.startDate));

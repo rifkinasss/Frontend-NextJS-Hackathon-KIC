@@ -4,7 +4,7 @@ import { API_BASE_URL } from "@/lib/api/client";
 export async function fetchFuzzyConfig(
   signal?: AbortSignal,
 ): Promise<FuzzyConfigResponse> {
-  const response = await fetch(`${API_BASE_URL}/config`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/config/fuzzy`, {
     signal,
     headers: {
       Accept: "application/json",
@@ -15,5 +15,6 @@ export async function fetchFuzzyConfig(
     throw new Error(`Gagal mengambil konfigurasi fuzzy (${response.status})`);
   }
 
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }

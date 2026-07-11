@@ -457,11 +457,11 @@ function MetricGrid({
   const metrics = [
     {
       title: t("monitoringPoints"),
-      value: t("locations3"),
+      value: `${sensorCount || 0} Lokasi`,
       subtitle: t("dustGasEmission"),
       icon: MapPin,
       iconClass: "text-sky-600 dark:text-sky-300",
-      level: 74,
+      level: sensorCount > 0 ? 74 : 0,
       progressClass: "from-sky-500 to-cyan-400",
       softClass: "bg-sky-50 dark:bg-sky-950/40",
     },
@@ -471,28 +471,28 @@ function MetricGrid({
       subtitle: t("fuzzificationActive"),
       icon: Database,
       iconClass: "text-violet-600 dark:text-violet-300",
-      level: 88,
+      level: sensorCount > 0 ? 88 : 0,
       progressClass: "from-violet-500 to-fuchsia-400",
       softClass: "bg-violet-50 dark:bg-violet-950/40",
     },
     {
       title: t("areaStatus"),
-      value: formatStatus(areaStatus, t),
-      subtitle: dataAvailable ? t("apiDataActive") : t("waitingData"),
+      value: sensorCount > 0 ? formatStatus(areaStatus, t) : "Menunggu Data",
+      subtitle: dataAvailable && sensorCount > 0 ? t("apiDataActive") : t("waitingData"),
       icon: AlertCircle,
       iconClass:
-        areaStatus === "BAHAYA"
+        sensorCount > 0 && areaStatus === "BAHAYA"
           ? "text-red-600 dark:text-red-300"
           : "text-emerald-600 dark:text-emerald-300",
-      level: areaStatus === "AMAN" ? 92 : areaStatus === "WASPADA" ? 62 : 24,
+      level: sensorCount > 0 ? (areaStatus === "AMAN" ? 92 : areaStatus === "WASPADA" ? 62 : 24) : 0,
       progressClass:
-        areaStatus === "BAHAYA"
+        sensorCount > 0 && areaStatus === "BAHAYA"
           ? "from-red-500 to-rose-400"
-          : areaStatus === "WASPADA"
+          : sensorCount > 0 && areaStatus === "WASPADA"
             ? "from-amber-500 to-orange-400"
             : "from-emerald-500 to-teal-400",
       softClass:
-        areaStatus === "BAHAYA"
+        sensorCount > 0 && areaStatus === "BAHAYA"
           ? "bg-red-50 dark:bg-red-950/40"
           : "bg-emerald-50 dark:bg-emerald-950/40",
     },

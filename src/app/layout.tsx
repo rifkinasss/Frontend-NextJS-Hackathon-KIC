@@ -5,6 +5,7 @@ import { LanguageProvider } from "@/components/i18n/LanguageProvider";
 import { AppHeader } from "@/components/layout/AppHeader";
 import Sidebar from "@/components/layout/Sidebar";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { TimezoneProvider } from "@/components/timezone/TimezoneProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { sidebarInitScript } from "@/lib/sidebar/sidebar-script";
 import { themeInitScript } from "@/lib/theme/theme-script";
@@ -42,19 +43,20 @@ export default function RootLayout({
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
         <ThemeProvider>
           <LanguageProvider>
-            <SidebarProvider>
-              <div className="flex">
-                <Sidebar />
-                <div className="ml-[var(--sidebar-width)] flex min-h-screen flex-1 flex-col transition-[margin-left] duration-300 ease-out">
-                  <AppHeader />
-                  <main className="p-8 pb-12">{children}</main>
+            <TimezoneProvider>
+              <SidebarProvider>
+                <div className="flex">
+                  <Sidebar />
+                  <div className="ml-[var(--sidebar-width)] flex min-h-screen flex-1 flex-col transition-[margin-left] duration-300 ease-out">
+                    <AppHeader />
+                    <main className="p-8 pb-12">{children}</main>
+                  </div>
                 </div>
-              </div>
-            </SidebarProvider>
+              </SidebarProvider>
+            </TimezoneProvider>
           </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>
   );
 }
-

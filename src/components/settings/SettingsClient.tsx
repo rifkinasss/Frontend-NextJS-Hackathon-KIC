@@ -14,6 +14,10 @@ import {
 import { LanguageToggle } from "@/components/i18n/LanguageToggle";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { ProvisioningPanel } from "@/components/settings/ProvisioningPanel";
+import { TimezoneSelect } from "@/components/timezone/TimezoneSelect";
+import { useTimezone } from "@/components/timezone/TimezoneProvider";
+import { getTimeZoneLabel } from "@/lib/timezone/timezone";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -32,7 +36,8 @@ type SettingsClientProps = {
 };
 
 export function SettingsClient({ apiBaseUrl }: SettingsClientProps) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
+  const { timeZone } = useTimezone();
   const configRows = [
     {
       icon: Server,
@@ -51,9 +56,9 @@ export function SettingsClient({ apiBaseUrl }: SettingsClientProps) {
     {
       icon: Clock3,
       label: t("timezone"),
-      status: "WITA",
+      status: timeZone === "Asia/Makassar" ? "WITA" : t("active"),
       tone: "warning",
-      value: t("operationalTimezone"),
+      value: getTimeZoneLabel(timeZone, locale === "id" ? "id-ID" : "en-US"),
     },
     {
       icon: HardDrive,
@@ -124,7 +129,17 @@ export function SettingsClient({ apiBaseUrl }: SettingsClientProps) {
         >
           <LanguageToggle />
         </PreferenceCard>
+
+        <PreferenceCard
+          description={t("timezonePreferenceDescription")}
+          icon={Clock3}
+          title={t("timezone")}
+        >
+          <TimezoneSelect />
+        </PreferenceCard>
       </section>
+
+      <ProvisioningPanel />
 
       <Card className="overflow-hidden rounded-2xl shadow-[0_18px_55px_-42px_rgba(15,23,42,0.95)]">
         <CardHeader className="border-b border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/60">

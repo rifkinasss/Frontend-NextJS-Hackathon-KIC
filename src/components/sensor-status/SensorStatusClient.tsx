@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
+import { useTimezone } from "@/components/timezone/TimezoneProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +74,7 @@ type SensorStatusRow = {
 
 export function SensorStatusClient() {
   const { t } = useLanguage();
+  const { timeZone } = useTimezone();
   const [analysisData, setAnalysisData] = useState<AnalysisResponse | null>(null);
   const [commandLoadingId, setCommandLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -465,7 +467,14 @@ export function SensorStatusClient() {
     const controller = new AbortController();
     void Promise.resolve().then(() => loadData(controller.signal));
 
-    return () => controller.abort();
+    const refreshInterval = window.setInterval(() => {
+      void loadData();
+    }, 30_000);
+
+    return () => {
+      controller.abort();
+      window.clearInterval(refreshInterval);
+    };
   }, [loadData]);
 
   const rows = useMemo(
@@ -659,7 +668,7 @@ export function SensorStatusClient() {
                     )}
                   </TableCell>
                   <TableCell className="text-right text-sm font-semibold text-slate-600 dark:text-slate-300">
-                    {formatLastReading(row)}
+                    {formatLastReading(row, timeZone)}
                   </TableCell>
                   <TableCell className="text-right">
                     <CommandButtons
@@ -1780,7 +1789,7 @@ function CommandButtons({
   );
 }
 
-function formatLastReading(row: SensorStatusRow) {
+function formatLastReading(row: SensorStatusRow, timeZone: string) {
   const value = row.state?.last_seen_at ?? row.latestWindow;
   if (!value || value === "-") return "-";
 
@@ -1792,9 +1801,9 @@ function formatLastReading(row: SensorStatusRow) {
     hour: "2-digit",
     minute: "2-digit",
     month: "short",
-    timeZone: "Asia/Makassar",
+    timeZone,
     year: "numeric",
-  }).format(date) + " WITA";
+  }).format(date);
 }
 
 function getStatusVariant(status: string) {

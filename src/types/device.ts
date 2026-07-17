@@ -24,3 +24,15 @@ export type DeviceCommand = {
   created_at: string | null;
   acknowledged_at: string | null;
 };
+
+export type RegisteredDevice = {
+  id: string;
+  device_code: string;
+  device_name: string;
+  hardware_id: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  firmware_ver: string | null;
+  provisioning_status: "pending" | "approved" | "rejected";
+};

@@ -1,5 +1,31 @@
 import { API_BASE_URL } from "@/lib/api/client";
-import type { DeviceCommand, DeviceCommandName, DeviceState } from "@/types/device";
+import type { DeviceCommand, DeviceCommandName, DeviceState, RegisteredDevice } from "@/types/device";
+
+export async function fetchDevices(signal?: AbortSignal): Promise<RegisteredDevice[]> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices`, {
+    signal,
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gagal mengambil perangkat (${response.status})`);
+  }
+
+  const result = (await response.json()) as { data?: RegisteredDevice[] };
+  return result.data ?? [];
+}
+
+export async function approveDevice(deviceId: string): Promise<RegisteredDevice> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/devices/${deviceId}/provisioning`, {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "approved" }),
+  });
+
+  if (!response.ok) throw new Error(`Gagal menyetujui perangkat (${response.status})`);
+  const result = (await response.json()) as { data: RegisteredDevice };
+  return result.data;
+}
 
 export async function fetchDeviceStates(
   signal?: AbortSignal,
@@ -116,4 +142,3 @@ export async function deleteDevice(
 
   return response.json();
 }
-

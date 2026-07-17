@@ -283,6 +283,9 @@ export const dictionaries = {
       "Pilih mode terang, gelap, atau mengikuti sistem perangkat.",
     languagePreferenceDescription:
       "Tukar bahasa dashboard tanpa mengubah data dari backend.",
+    chooseTimezone: "Pilih zona waktu",
+    timezonePreferenceDescription:
+      "Tampilan tanggal dan waktu mengikuti pilihan ini. Data di database tetap disimpan dalam UTC.",
   },
   en: {
     appTitle: "Emission Monitoring System",
@@ -564,6 +567,9 @@ export const dictionaries = {
       "Choose light, dark, or follow the device system setting.",
     languagePreferenceDescription:
       "Switch dashboard language without changing backend data.",
+    chooseTimezone: "Choose timezone",
+    timezonePreferenceDescription:
+      "Displayed dates and times follow this setting. Database data remains stored in UTC.",
   },
 } as const;
 
